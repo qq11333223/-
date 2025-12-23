@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 管理助手</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <style>
+:root {
+    --primary: #6366f1; --primary-light: #818cf8;
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #f1f5f9; --muted: #94a3b8; --dim: #64748b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+input, select, button { font-family: inherit; font-size: 16px; }
+input { padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); width: 100%; }
+input:focus { outline: none; border-color: var(--primary); }
+input::placeholder { color: var(--dim); }
+
+.btn { padding: 14px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600; font-size: 15px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-warning { background: var(--warning); color: #000; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-sm { padding: 10px 16px; font-size: 14px; width: auto; }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.badge { display: inline-flex; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.badge-success { background: rgba(16,185,129,0.2); color: var(--success); }
+.badge-danger { background: rgba(239,68,68,0.2); color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+</body>
+</html>
+<style>
+
+/* 页面布局 */
+.page { display: none; min-height: 100vh; padding-bottom: 80px; }
+.page.active { display: block; }
+.header { position: sticky; top: 0; background: rgba(15,23,42,0.95); backdrop-filter: blur(10px); padding: 16px 20px; border-bottom: 1px solid var(--border); z-index: 100; }
+.header h1 { font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.header .subtitle { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.content { padding: 16px; }
+
+/* 登录页 */
+.login-page { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+.login-box { width: 100%; max-width: 360px; }
+.login-box .logo { font-size: 64px; text-align: center; margin-bottom: 16px; }
+.login-box h2 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+.login-box .desc { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+.login-box .form-group { margin-bottom: 14px; }
+.login-error { color: var(--danger); font-size: 13px; text-align: center; margin-top: 12px; min-height: 20px; }
+
+/* 卡片 */
+.card { background: var(--card); border-radius: 16px; border: 1px solid var(--border); margin-bottom: 16px; overflow: hidden; }
+.card-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.card-header h3 { font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.card-body { padding: 16px; }
+
+/* 统计卡片 */
+.stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.stat-card { background: var(--card); border-radius: 14px; padding: 16px; border: 1px solid var(--border); }
+.stat-card .icon { font-size: 24px; margin-bottom: 8px; }
+.stat-card .value { font-size: 24px; font-weight: 700; }
+.stat-card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* 用户列表 */
+.user-item { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.user-item:last-child { border-bottom: none; }
+.user-item:active { background: rgba(255,255,255,0.03); }
+.user-avatar { width: 44px; height: 44px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.user-info { flex: 1; min-width: 0; }
+.user-info .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-info .email { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-info .meta { display: flex; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.user-actions { display: flex; gap: 8px; }
+
+/* 底部导航 */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; padding: 8px 0; padding-bottom: max(8px, env(safe-area-inset-bottom)); z-index: 200; }
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; color: var(--dim); font-size: 11px; cursor: pointer; transition: color 0.2s; }
+.nav-item.active { color: var(--primary-light); }
+.nav-item .icon { font-size: 22px; }
+
+/* 搜索栏 */
+.search-bar { position: relative; margin-bottom: 16px; }
+.search-bar input { padding-left: 44px; }
+.search-bar::before { content: '🔍'; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 16px; }
+
+/* 操作面板 */
+.action-panel { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+.action-panel .title { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+.action-panel .form-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.action-panel .form-row input { flex: 1; }
+.action-panel .form-row input[type="number"] { width: 100px; flex: none; }
+
+/* Toast */
+#toast { position: fixed; top: 20px; left: 20px; right: 20px; padding: 14px 20px; background: var(--card); border-radius: 12px; z-index: 9999; display: none; text-align: center; font-size: 14px; border: 1px solid var(--border); }
+#toast.success { border-color: var(--success); }
+#toast.error { border-color: var(--danger); }
+
+/* 模态框 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: flex-end; z-index: 1000; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--card); border-radius: 20px 20px 0 0; width: 100%; max-height: 85vh; overflow: hidden; animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 17px; }
+.modal-close { background: none; border: none; color: var(--dim); font-size: 24px; cursor: pointer; padding: 4px; }
+.modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 140px); }
+.modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+
+/* 加载 */
+.loading { display: flex; justify-content: center; padding: 40px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 空状态 */
+.empty { text-align: center; padding: 40px 20px; color: var(--dim); }
+.empty .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+/* 下拉刷新提示 */
+.pull-hint { text-align: center; padding: 12px; color: var(--dim); font-size: 13px; display: none; }
+</style>
+<s
+cript>
+// ==================== 配置 ====================
+const SUPABASE_URL = 'https://zprjmobhunuiglrntote.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpwcmptb2JodW51aWdscm50b3RlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3OTY2MTMsImV4cCI6MjA4MTM3MjYxM30.76cPZFtswxCpDGXJ8VB-ta404BFy4oz3H0axxAs27O8';
+const ADMIN_EMAILS = ['11333223@qq.com'];
+
+// ==================== 状态 ====================
+let db, currentUser;
+let allUsers = [];
+let currentTab = 'home';
+let searchKeyword = '';
+
+// ==================== 工具函数 ====================
+const $ = id => document.getElementById(id);
+const formatMoney = n => '¥' + (n || 0).toFixed(2);
+const formatDate = d => d ? new Date(d).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+
+function showToast(msg, type = 'success') {
+    const toast = $('toast');
+    toast.textContent = msg;
+    toast.className = type;
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 2500);
+}
+
+function closeModal() {
+    document.querySelector('.modal-overlay')?.classList.remove('show');
+}
+
+function showModal(title, content, footer = '') {
+    let overlay = document.querySelector('.modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.onclick = e => { if (e.target === overlay) closeModal(); };
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+        <div class="modal">
+            <div class="modal-header"><h3>${title}</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+            <div class="modal-body">${content}</div>
+            ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+        </div>
+    `;
+    overlay.classList.add('show');
+}
+
+// ==================== 初始化 ====================
+async function init() {
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    renderApp();
+    
+    // 检查登录状态
+    const { data: { session } } = await db.auth.getSession();
+    if (session && ADMIN_EMAILS.includes(session.user.email)) {
+        currentUser = session.user;
+        showMain();
+    }
+}
+
+// ==================== 渲染应用 ====================
+function renderApp() {
+    $('app').innerHTML = `
+        <!-- 登录页 -->
+        <div class="login-page" id="login-page">
+            <div class="login-box">
+                <div class="logo">📱</div>
+                <h2>管理助手</h2>
+                <p class="desc">手机端快捷管理工具</p>
+                <div class="form-group">
+                    <input type="email" id="login-email" placeholder="管理员邮箱" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+                </div>
+                <button class="btn btn-primary" onclick="login()">登 录</button>
+                <div class="login-error" id="login-error"></div>
+            </div>
+        </div>
+        
+        <!-- 主页面 -->
+        <div class="page" id="page-home">
+            <div class="header">
+                <h1>📊 数据概览</h1>
+                <div class="subtitle" id="admin-info">管理员</div>
+            </div>
+            <div class="content" id="home-content"></div>
+        </div>
+        
+        <!-- 用户页 -->
+        <div class="page" id="page-users">
+            <div class="header">
+                <h1>👥 用户管理</h1>
+            </div>
+            <div class="content">
+                <div class="search-bar">
+                    <input type="text" id="user-search" placeholder="搜索邮箱..." oninput="handleSearch(this.value)">
+                </div>
+                <div id="users-list"></div>
+            </div>
+        </div>
+        
+        <!-- 操作页 -->
+        <div class="page" id="page-actions">
+            <div class="header">
+                <h1>⚡ 快捷操作</h1>
+            </div>
+            <div class="content" id="actions-content"></div>
+        </div>
+        
+        <!-- 设置页 -->
+        <div class="page" id="page-settings">
+            <div class="header">
+                <h1>⚙️ 设置</h1>
+            </div>
+            <div class="content" id="settings-content"></div>
+        </div>
+        
+        <!-- 底部导航 -->
+        <nav class="bottom-nav" id="bottom-nav" style="display:none">
+            <div class="nav-item active" data-tab="home"><span class="icon">📊</span><span>概览</span></div>
+            <div class="nav-item" data-tab="users"><span class="icon">👥</span><span>用户</span></div>
+            <div class="nav-item" data-tab="actions"><span class="icon">⚡</span><span>操作</span></div>
+            <div class="nav-item" data-tab="settings"><span class="icon">⚙️</span><span>设置</span></div>
+        </nav>
+    `;
+    
+    // 绑定底部导航
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.onclick = () => switchTab(item.dataset.tab);
+    });
+}
+</script>
+<script>
+
+// ==================== 认证 ====================
+async function login() {
+    const email = $('login-email').value.trim();
+    const pwd = $('login-password').value;
+    const err = $('login-error');
+    
+    if (!email || !pwd) { err.textContent = '请输入邮箱和密码'; return; }
+    if (!ADMIN_EMAILS.includes(email)) { err.textContent = '❌ 无管理员权限'; return; }
+    
+    err.textContent = '登录中...';
+    try {
+        const { data, error } = await db.auth.signInWithPassword({ email, password: pwd });
+        if (error) { err.textContent = '❌ ' + error.message; return; }
+        currentUser = data.user;
+        showMain();
+    } catch (e) { err.textContent = '❌ ' + e.message; }
+}
+
+async function logout() {
+    await db.auth.signOut();
+    currentUser = null;
+    $('login-page').style.display = 'flex';
+    $('bottom-nav').style.display = 'none';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+}
+
+function showMain() {
+    $('login-page').style.display = 'none';
+    $('bottom-nav').style.display = 'flex';
+    $('admin-info').textContent = currentUser.email.split('@')[0];
+    loadData().then(() => switchTab('home'));
+}
+
+// ==================== 数据加载 ====================
+async function loadData() {
+    try {
+        const { data, error } = await db.from('profiles').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        allUsers = data || [];
+    } catch (e) {
+        console.error('加载失败:', e);
+        showToast('❌ 加载失败', 'error');
+    }
+}
+
+async function refreshData() {
+    showToast('🔄 刷新中...');
+    await loadData();
+    renderCurrentTab();
+    showToast('✅ 已刷新');
+}
+
+// ==================== 标签页切换 ====================
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === tab));
+    $(`page-${tab}`)?.classList.add('active');
+    renderCurrentTab();
+}
+
+function renderCurrentTab() {
+    switch (currentTab) {
+        case 'home': renderHome(); break;
+        case 'users': renderUsers(); break;
+        case 'actions': renderActions(); break;
+        case 'settings': renderSettings(); break;
+    }
+}
+
+// ==================== 首页 ====================
+function renderHome() {
+    const total = allUsers.length;
+    const auth = allUsers.filter(u => u.is_authorized).length;
+    const bal = allUsers.reduce((s, u) => s + (u.balance || 0), 0);
+    const today = new Date().toDateString();
+    const todayUsers = allUsers.filter(u => new Date(u.created_at).toDateString() === today).length;
+    
+    $('home-content').innerHTML = `
+        <div class="stats-row">
+            <div class="stat-card"><div class="icon">👥</div><div class="value">${total}</div><div class="label">总用户</div></div>
+            <div class="stat-card"><div class="icon">✅</div><div class="value">${auth}</div><div class="label">已授权</div></div>
+        </div>
+        <div class="stats-row">
+            <div class="stat-card"><div class="icon">💰</div><div class="value">${formatMoney(bal)}</div><div class="label">总余额</div></div>
+            <div class="stat-card"><div class="icon">🆕</div><div class="value">${todayUsers}</div><div class="label">今日新增</div></div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><h3>🆕 最近注册</h3><button class="btn btn-sm btn-ghost" onclick="switchTab('users')">全部</button></div>
+            <div id="recent-users"></div>
+        </div>
+        
+        <button class="btn btn-ghost" onclick="refreshData()" style="margin-top:8px">🔄 刷新数据</button>
+    `;
+    
+    // 最近用户
+    $('recent-users').innerHTML = allUsers.slice(0, 5).map(u => `
+        <div class="user-item" onclick="showUserDetail('${u.id}')">
+            <div class="user-avatar">👤</div>
+            <div class="user-info">
+                <div class="name">${u.email?.split('@')[0] || '-'}</div>
+                <div class="meta">
+                    <span>${formatMoney(u.balance)}</span>
+                    <span>${formatDate(u.created_at)}</span>
+                </div>
+            </div>
+            <span class="badge ${u.is_authorized ? 'badge-success' : 'badge-danger'}">${u.is_authorized ? '已授权' : '未授权'}</span>
+        </div>
+    `).join('') || '<div class="empty"><div class="icon">📭</div><p>暂无用户</p></div>';
+}
+
+// ==================== 用户列表 ====================
+function renderUsers() {
+    let list = [...allUsers];
+    if (searchKeyword) {
+        list = list.filter(u => (u.email || '').toLowerCase().includes(searchKeyword.toLowerCase()));
+    }
+    
+    $('users-list').innerHTML = list.length ? list.map(u => `
+        <div class="user-item" onclick="showUserDetail('${u.id}')">
+            <div class="user-avatar">👤</div>
+            <div class="user-info">
+                <div class="name">${u.email?.split('@')[0] || '-'}</div>
+                <div class="email">${u.email || ''}</div>
+                <div class="meta">
+                    <span>${formatMoney(u.balance)}</span>
+                    <span>邀请${u.invite_count || 0}人</span>
+                </div>
+            </div>
+            <span class="badge ${u.is_authorized ? 'badge-success' : 'badge-danger'}">${u.is_authorized ? '已授权' : '未授权'}</span>
+        </div>
+    `).join('') : '<div class="empty"><div class="icon">🔍</div><p>没有找到用户</p></div>';
+}
+
+function handleSearch(value) {
+    searchKeyword = value;
+    renderUsers();
+}
+</script>
+
+<script>
+// ==================== 用户详情 ====================
+function showUserDetail(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    const content = `
+        <div style="text-align:center;margin-bottom:20px">
+            <div style="width:64px;height:64px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">👤</div>
+            <div style="font-size:18px;font-weight:600">${user.email?.split('@')[0] || '-'}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px">${user.email || ''}</div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+            <div style="background:var(--bg);padding:14px;border-radius:12px;text-align:center">
+                <div style="font-size:20px;font-weight:700;color:var(--success)">${formatMoney(user.balance)}</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:4px">余额</div>
+            </div>
+            <div style="background:var(--bg);padding:14px;border-radius:12px;text-align:center">
+                <div style="font-size:20px;font-weight:700">${user.invite_count || 0}</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:4px">邀请人数</div>
+            </div>
+        </div>
+        
+        <div style="background:var(--bg);padding:14px;border-radius:12px;margin-bottom:20px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="color:var(--muted)">授权状态</span>
+                <span class="badge ${user.is_authorized ? 'badge-success' : 'badge-danger'}">${user.is_authorized ? '已授权' : '未授权'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="color:var(--muted)">邀请码</span>
+                <span style="font-family:monospace;color:var(--warning)">${user.invite_code || '-'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--muted)">注册时间</span>
+                <span>${formatDate(user.created_at)}</span>
+            </div>
+        </div>
+        
+        <div style="margin-bottom:16px">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:8px">充值/扣款</div>
+            <div style="display:flex;gap:10px">
+                <input type="number" id="modal-amount" value="100" style="flex:1">
+                <button class="btn btn-success btn-sm" onclick="doRecharge('${user.id}', 1)">充值</button>
+                <button class="btn btn-warning btn-sm" onclick="doRecharge('${user.id}', -1)">扣款</button>
+            </div>
+        </div>
+    `;
+    
+    const footer = `
+        <div class="btn-row">
+            ${user.is_authorized 
+                ? `<button class="btn btn-danger" onclick="doAuth('${user.id}', false)">❌ 取消授权</button>`
+                : `<button class="btn btn-success" onclick="doAuth('${user.id}', true)">✅ 授权</button>`
+            }
+            <button class="btn btn-ghost" onclick="closeModal()">关闭</button>
+        </div>
+    `;
+    
+    showModal('用户详情', content, footer);
+}
+
+// ==================== 用户操作 ====================
+async function doRecharge(userId, sign) {
+    const amount = parseFloat($('modal-amount')?.value || 0) * sign;
+    if (!amount) { showToast('❌ 请输入金额', 'error'); return; }
+    
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    const newBalance = (user.balance || 0) + amount;
+    try {
+        const { error } = await db.from('profiles').update({ balance: newBalance }).eq('id', userId);
+        if (error) throw error;
+        
+        // 记录充值
+        await db.from('recharges').insert({
+            user_id: userId,
+            amount: amount,
+            balance_after: newBalance,
+            operator: currentUser.email,
+            note: '手机端操作'
+        });
+        
+        user.balance = newBalance;
+        showToast(`✅ ${sign > 0 ? '充值' : '扣款'}成功`);
+        closeModal();
+        renderCurrentTab();
+    } catch (e) {
+        showToast('❌ 操作失败: ' + e.message, 'error');
+    }
+}
+
+async function doAuth(userId, authorize) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    try {
+        const updateData = {
+            is_authorized: authorize,
+            authorized_at: authorize ? new Date().toISOString() : null,
+            authorized_by: authorize ? currentUser.email : null
+        };
+        
+        const { error } = await db.from('profiles').update(updateData).eq('id', userId);
+        if (error) throw error;
+        
+        user.is_authorized = authorize;
+        user.authorized_at = updateData.authorized_at;
+        user.authorized_by = updateData.authorized_by;
+        
+        showToast(`✅ ${authorize ? '授权' : '取消授权'}成功`);
+        closeModal();
+        renderCurrentTab();
+    } catch (e) {
+        showToast('❌ 操作失败: ' + e.message, 'error');
+    }
+}
+
+// ==================== 快捷操作页 ====================
+function renderActions() {
+    $('actions-content').innerHTML = `
+        <div class="action-panel">
+            <div class="title">💰 快速充值</div>
+            <div class="form-row">
+                <input type="email" id="action-email" placeholder="用户邮箱">
+            </div>
+            <div class="form-row">
+                <input type="number" id="action-amount" value="100" placeholder="金额">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-success" onclick="quickRecharge(1)">💰 充值</button>
+                <button class="btn btn-warning" onclick="quickRecharge(-1)">➖ 扣款</button>
+            </div>
+        </div>
+        
+        <div class="action-panel">
+            <div class="title">✅ 快速授权</div>
+            <div class="form-row">
+                <input type="email" id="auth-email" placeholder="用户邮箱">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="quickAuth(true)">✅ 授权</button>
+                <button class="btn btn-danger" onclick="quickAuth(false)">❌ 取消</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><h3>📋 待授权用户</h3></div>
+            <div id="pending-users"></div>
+        </div>
+    `;
+    
+    // 待授权用户
+    const pending = allUsers.filter(u => !u.is_authorized).slice(0, 10);
+    $('pending-users').innerHTML = pending.length ? pending.map(u => `
+        <div class="user-item">
+            <div class="user-avatar">👤</div>
+            <div class="user-info">
+                <div class="name">${u.email?.split('@')[0] || '-'}</div>
+                <div class="email">${u.email || ''}</div>
+            </div>
+            <button class="btn btn-sm btn-success" onclick="quickAuthById('${u.id}')">授权</button>
+        </div>
+    `).join('') : '<div class="empty" style="padding:20px"><p>暂无待授权用户</p></div>';
+}
+
+async function quickRecharge(sign) {
+    const email = $('action-email').value.trim();
+    const amount = parseFloat($('action-amount').value) * sign;
+    
+    if (!email) { showToast('❌ 请输入邮箱', 'error'); return; }
+    if (!amount) { showToast('❌ 请输入金额', 'error'); return; }
+    
+    const user = allUsers.find(u => u.email === email);
+    if (!user) { showToast('❌ 用户不存在', 'error'); return; }
+    
+    await doRecharge(user.id, sign > 0 ? 1 : -1);
+    $('action-email').value = '';
+}
+
+async function quickAuth(authorize) {
+    const email = $('auth-email').value.trim();
+    if (!email) { showToast('❌ 请输入邮箱', 'error'); return; }
+    
+    const user = allUsers.find(u => u.email === email);
+    if (!user) { showToast('❌ 用户不存在', 'error'); return; }
+    
+    await doAuth(user.id, authorize);
+    $('auth-email').value = '';
+}
+
+async function quickAuthById(userId) {
+    await doAuth(userId, true);
+    renderActions();
+}
+</script>
+<
+script>
+// ==================== 设置页 ====================
+function renderSettings() {
+    $('settings-content').innerHTML = `
+        <div class="card">
+            <div class="card-body">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                    <div style="width:48px;height:48px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>
+                    <div>
+                        <div style="font-weight:600">${currentUser?.email?.split('@')[0] || '管理员'}</div>
+                        <div style="font-size:12px;color:var(--muted)">${currentUser?.email || ''}</div>
+                    </div>
+                </div>
+                <button class="btn btn-danger" onclick="confirmLogout()">🚪 退出登录</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><h3>📊 数据统计</h3></div>
+            <div class="card-body">
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--muted)">总用户数</span>
+                    <span>${allUsers.length}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--muted)">已授权</span>
+                    <span>${allUsers.filter(u => u.is_authorized).length}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--muted)">未授权</span>
+                    <span>${allUsers.filter(u => !u.is_authorized).length}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0">
+                    <span style="color:var(--muted)">平台总余额</span>
+                    <span style="color:var(--success)">${formatMoney(allUsers.reduce((s, u) => s + (u.balance || 0), 0))}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><h3>ℹ️ 关于</h3></div>
+            <div class="card-body" style="color:var(--muted);font-size:13px">
+                <p>📱 移动端管理助手</p>
+                <p style="margin-top:8px">用于快速管理用户授权和充值</p>
+                <p style="margin-top:8px">版本: 1.0.0</p>
+            </div>
+        </div>
+    `;
+}
+
+function confirmLogout() {
+    showModal('确认退出', '<p style="text-align:center;padding:20px 0">确定要退出登录吗？</p>', `
+        <div class="btn-row">
+            <button class="btn btn-danger" onclick="logout();closeModal()">确定退出</button>
+            <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        </div>
+    `);
+}
+
+// ==================== 启动 ====================
+document.addEventListener('DOMContentLoaded', init);
+</script>
